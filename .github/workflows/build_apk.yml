@@ -31,10 +31,17 @@ jobs:
           sed -i '/^p4a.bootstrap/d' buildozer.spec || true
           sed -i '/^requirements/d' buildozer.spec || true
           sed -i '/^android.accept_sdk_license/d' buildozer.spec || true
+          sed -i '/^android.ndk/d' buildozer.spec || true
+          sed -i '/^p4a.port/d' buildozer.spec || true
+          sed -i '/^source.include_exts/d' buildozer.spec || true
+          sed -i '/^android.permissions/d' buildozer.spec || true
+          
           echo "p4a.bootstrap = webview" >> buildozer.spec
           echo "requirements = python3,flask,requests" >> buildozer.spec
           echo "android.accept_sdk_license = True" >> buildozer.spec
           echo "android.ndk = 25b" >> buildozer.spec
+          echo "p4a.port = 8080" >> buildozer.spec
+          echo "source.include_exts = py,png,jpg,kv,atlas,html,css,js,json" >> buildozer.spec
           echo "android.permissions = INTERNET" >> buildozer.spec
 
       - name: Build APK
