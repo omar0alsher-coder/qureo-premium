@@ -94,13 +94,14 @@ jobs:
           head -40 buildozer.spec
           ls -la *.py 2>/dev/null | head -20 || true
 
-      - name: Build APK with Buildozer
-        uses: TomerBG2/buildozer-action@v1
-        id: buildozer
-        with:
-          command: buildozer -v android debug
-          workdir: .
-          buildozer_version: stable
+      - name: Build APK with Buildozer (Docker)
+        run: |
+          docker run --rm \
+            -v "$PWD":/home/user/hostcwd \
+            -v "$HOME/.buildozer":/home/user/.buildozer \
+            -e BUILDOZER_WARN_ON_ROOT=1 \
+            ghcr.io/kivy/buildozer:latest \
+            buildozer -v android debug
 
       - name: Show APK outputs
         if: always()
