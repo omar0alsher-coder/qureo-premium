@@ -19,7 +19,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y git zip unzip openjdk-17-jdk autoconf libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev cmake libffi-dev libssl-dev
+          sudo apt-get install -y git zip unzip openjdk-17-jdk autoconf libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev cmake libffi-dev libssl-dev automake libltdl-dev
 
       - name: Install buildozer
         run: |
@@ -34,6 +34,8 @@ jobs:
           echo "p4a.bootstrap = webview" >> buildozer.spec
           echo "requirements = python3,flask,requests" >> buildozer.spec
           echo "android.accept_sdk_license = True" >> buildozer.spec
+          echo "android.ndk = 25b" >> buildozer.spec
+          echo "android.permissions = INTERNET" >> buildozer.spec
 
       - name: Build APK
         run: |
