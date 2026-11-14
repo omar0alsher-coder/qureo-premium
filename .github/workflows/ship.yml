@@ -30,10 +30,22 @@ jobs:
         run: |
           sed -i '/^p4a.bootstrap/d' buildozer.spec || true
           sed -i '/^requirements/d' buildozer.spec || true
+          sed -i '/^android.accept_sdk_license/d' buildozer.spec || true
           echo "p4a.bootstrap = webview" >> buildozer.spec
           echo "requirements = python3,flask,requests" >> buildozer.spec
+          echo "android.accept_sdk_license = True" >> buildozer.spec
           echo "=== buildozer.spec ==="
           cat buildozer.spec
+
+      - name: Accept Android SDK licenses
+        run: |
+          export ANDROID_SDK_ROOT=$HOME/.buildozer/android/platform/android-sdk
+          mkdir -p $ANDROID_SDK_ROOT/licenses
+          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses || \
+          yes | $ANDROID_SDK_ROOT/tools/bin/sdkmanager --licenses || true
+          # Pre-create license hash files as a fallback
+          echo -e "\n8933bad161af4b6a5b573652ffc7aaf3aee85a47" > $ANDROID_SDK_ROOT/licenses/android-sdk-license
+          echo -e "\nd56f5187479451eabf01fb78af6dfcb131b33910" > $ANDROID_SDK_ROOT/licenses/android-sdk-preview-license
 
       - name: Build APK
         run: |
