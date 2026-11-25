@@ -18,7 +18,7 @@ jobs:
           gradle wrapper --gradle-version 7.5
           ./gradlew assembleDebug
       - name: Upload APK
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: Qureo-Solver-APK
           path: app/build/outputs/apk/debug/app-debug.apk
