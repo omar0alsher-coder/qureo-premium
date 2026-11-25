@@ -43,8 +43,8 @@
     let currentCookies = "";
     let callbacks = {};
     let cbId = 0;
+    let currentSectionId = null;
 
-    // دالة الاتصال بالجافا
     function apiRequest(method, path, body = null) {
         return new Promise((resolve, reject) => {
             const id = cbId++;
@@ -55,7 +55,6 @@
         });
     }
 
-    // دالة استقبال الرد من الجافا
     window.onBridgeResponse = function(reqId, bodyStr, statusCode) {
         const cb = callbacks[reqId];
         if (!cb) return;
@@ -95,31 +94,45 @@
 
     async function loadStatus() {
         try {
-            const chaps = await apiRequest("GET", "/api/study/students/sections/5/chapters");
-            const progress_map = {};
-            if(Array.isArray(chaps)) chaps.forEach(x => progress_map[x.chapter_id] = x);
-            
-            const meta = await apiRequest("GET", "/api/study/sections/5");
-            const q_map = {};
-            if(meta.chapters) meta.chapters.forEach(x => q_map[x.id] = x.question_count || 5);
+            // 1. استخراج معرف الكورس من الكوكيز (javascript_ar, python, الخ)
+            let courseId = "javascript_ar";
+            const cookieMatch = currentCookies.match(/student_selected_content_id=([^;]+)/);
+            if (cookieMatch) courseId = cookieMatch[1];
 
+            // 2. جلب رقم السكشن الحقيقي
+            const courseData = await apiRequest("GET", `/api/study/courses/${courseId}`);
+            currentSectionId = courseData.basic_section.id;
+
+            // 3. جلب قائمة المراحل الحقيقية من السيرفر (هتجيب 42 أو 54 أو أي رقم)
+            const meta = await apiRequest("GET", `/api/study/sections/${currentSectionId}`);
+            const chaptersList = meta.chapters;
+
+            // 4. جلب حالة كل مرحلة (حل ولا لسه)
+            const progress = await apiRequest("GET", `/api/study/students/sections/${currentSectionId}/chapters`);
+            const progress_map = {};
+            if(Array.isArray(progress)) progress.forEach(x => progress_map[x.chapter_id] = x);
+
+            // 5. رسم الواجهة
             const container = document.getElementById('chapters-list');
             container.innerHTML = '';
-            for (let i = 1; i <= 42; i++) {
-                const id = 90000 + i;
+            
+            chaptersList.forEach((ch, index) => {
+                const id = ch.id;
+                const num = ch.seq || (index + 1);
                 const info = progress_map[id] || {};
                 const sc = info.best_correct_count || 0;
-                const qn = q_map[id] || 5;
+                const qn = ch.question_count || 5;
+                
                 let badge = "RETRY";
                 if (sc === qn && qn > 0) badge = "PERFECT";
                 else if (sc > 0) badge = "CLEAR";
 
                 container.innerHTML += `
                     <div class="chapter">
-                        <div class="chapter-info">${i}. مرحلة <span class="badge ${badge}">[${badge}] (${sc}/${qn})</span></div>
-                        <button class="solve-btn" onclick="solveOne(${id}, ${i})">حل</button>
+                        <div class="chapter-info">${num}. ${ch.name || 'مرحلة'} <span class="badge ${badge}">[${badge}] (${sc}/${qn})</span></div>
+                        <button class="solve-btn" onclick="solveOne(${id}, ${num})">حل</button>
                     </div>`;
-            }
+            });
         } catch(e) { logMsg("خطأ في جلب الحالة: " + e.message, "red"); }
     }
 
@@ -137,24 +150,33 @@
         document.getElementById('log').innerHTML = "";
         logMsg(`💥 بدء الحل الشامل...`, "#00bcd4");
         try {
-            const chaps = await apiRequest("GET", "/api/study/students/sections/5/chapters");
-            const progress_map = {};
-            if(Array.isArray(chaps)) chaps.forEach(x => progress_map[x.chapter_id] = x);
-            const meta = await apiRequest("GET", "/api/study/sections/5");
-            const q_map = {};
-            if(meta.chapters) meta.chapters.forEach(x => q_map[x.id] = x.question_count || 5);
+            // نفس المنطق الذكي لجلب المراحل
+            let courseId = "javascript_ar";
+            const cookieMatch = currentCookies.match(/student_selected_content_id=([^;]+)/);
+            if (cookieMatch) courseId = cookieMatch[1];
 
-            for (let i = 1; i <= 42; i++) {
-                const id = 90000 + i;
+            const courseData = await apiRequest("GET", `/api/study/courses/${courseId}`);
+            const sectionId = courseData.basic_section.id;
+
+            const meta = await apiRequest("GET", `/api/study/sections/${sectionId}`);
+            const chaptersList = meta.chapters;
+            
+            const progress = await apiRequest("GET", `/api/study/students/sections/${sectionId}/chapters`);
+            const progress_map = {};
+            if(Array.isArray(progress)) progress.forEach(x => progress_map[x.chapter_id] = x);
+
+            for (let ch of chaptersList) {
+                const id = ch.id;
+                const num = ch.seq || 0;
                 const info = progress_map[id] || {};
                 const sc = info.best_correct_count || 0;
-                const qn = q_map[id] || 5;
+                const qn = ch.question_count || 5;
 
                 if (mode === 'perfect' && sc >= qn) continue;
                 
-                logMsg(`\n=== المرحلة ${i} ===`, "#00bcd4");
+                logMsg(`\n=== المرحلة ${num} ===`, "#00bcd4");
                 await processChapter(id);
-                AndroidNative.notify("Qureo Solver", `تم حل المرحلة ${i} بنجاح!`);
+                AndroidNative.notify("Qureo Solver", `تم حل المرحلة ${num} بنجاح!`);
                 await sleep(200);
             }
             await loadStatus();
@@ -169,7 +191,6 @@
         const prefix = testType === "test" ? "test" : "review";
         const ep = `/api/study/students/${prefix}-questions`;
 
-        // الدروس
         if (data.lectures && data.lectures.length > 0) {
             for (let lec of data.lectures) {
                 logMsg(`▶ درس ${lec.id}`, "info");
@@ -191,7 +212,6 @@
             await sleep(500);
         }
 
-        // الأسئلة
         const qList = await apiRequest("GET", `/api/study/chapters/${chapId}/test`);
         const questions = qList.map(q => ({ id: q.question.id, type: q.question.type })).filter(q => q.id);
         
