@@ -32,7 +32,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         
-        // إخفاء الخط الأسود (Full Screen + Notch Support)
+        // الشاشة الكاملة (إخفاء الخط الأسود)
         WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
         WindowInsetsControllerCompat controller = new WindowInsetsControllerCompat(getWindow(), getWindow().getDecorView());
         controller.hide(WindowInsetsCompat.Type.systemBars());
@@ -42,11 +42,10 @@ public class MainActivity extends AppCompatActivity {
 
         startService(new Intent(this, KeepAliveService.class));
 
-        // إدارة الكوكيز تلقائياً
         cookieManager = new CookieManager(null, CookiePolicy.ACCEPT_ALL);
         client = new OkHttpClient.Builder()
                 .cookieJar(new JavaNetCookieJar(cookieManager))
-                .followRedirects(false) // مهم جداً عشان نلقط الـ 302 والكوكيز في اللوجين
+                .followRedirects(false) // مهم جداً لالتقاط الكوكيز
                 .build();
 
         webView = new WebView(this);
@@ -64,7 +63,6 @@ public class MainActivity extends AppCompatActivity {
             public void httpRequest(String method, String url, String body, String reqId) {
                 Request.Builder builder = new Request.Builder().url(url);
                 
-                // هيدرز مختلفة حسب الدومين
                 if (url.contains("me-portal.qureo.education")) {
                     builder.addHeader("Origin", "https://me-portal.qureo.education");
                     builder.addHeader("Referer", "https://me-portal.qureo.education/login");
@@ -93,7 +91,6 @@ public class MainActivity extends AppCompatActivity {
                     public void onResponse(Call call, Response response) throws IOException {
                         String respBody = response.body() != null ? response.body().string() : "{}";
                         
-                        // تجميع الكوكيز الحالية لتمريرها للـ JS لو حابب يعرف رقم المادة
                         StringBuilder cookies = new StringBuilder();
                         List<HttpCookie> cookieList = cookieManager.getCookieStore().getCookies();
                         for (HttpCookie c : cookieList) {

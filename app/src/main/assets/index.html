@@ -5,38 +5,156 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Qureo Solver</title>
     <style>
-        body { background-color: #0f111a; color: #fff; font-family: 'Segoe UI', Tahoma, sans-serif; margin: 0; padding: env(safe-area-inset-top) 15px 15px 15px; user-select: none; }
-        .container { max-width: 600px; margin: auto; padding-top: 20px; }
-        input { width: 100%; padding: 12px; margin: 5px 0; border: 1px solid #333; background: #1e1e2f; color: #fff; border-radius: 8px; box-sizing: border-box; font-family: inherit; }
-        button { background: #00bcd4; color: #000; border: none; padding: 12px; font-weight: bold; border-radius: 8px; cursor: pointer; width: 100%; margin-top: 10px; }
-        .btn-solve-all { background: #4caf50; color: white; margin-bottom: 15px; font-size: 16px; }
-        .chapter { display: flex; justify-content: space-between; align-items: center; background: #1e1e2f; padding: 10px; margin: 5px 0; border-radius: 8px; font-size: 14px; }
-        .chapter-info { flex: 1; }
-        .badge { padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; margin: 0 5px; }
-        .PERFECT { background: #4caf50; color: white; }
-        .CLEAR { background: #ff9800; color: white; }
-        .RETRY { background: #f44336; color: white; }
-        .solve-btn { background: #2196f3; color: white; padding: 6px 12px; width: auto; margin: 0; font-size: 12px; }
-        #log { background: #000; color: #00ff00; font-family: monospace; padding: 10px; height: 250px; overflow-y: auto; border-radius: 8px; margin-top: 15px; font-size: 12px; display: none; white-space: pre-wrap; border: 1px solid #333; }
-        .hidden { display: none; }
-        h2 { text-align: center; color: #00bcd4; margin-top: 0; }
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap');
+
+        :root {
+            --bg-color: #0b0e14;
+            --card-bg: #151b26;
+            --text-main: #ffffff;
+            --text-muted: #8892b0;
+            --green: #00e676;
+            --green-bg: rgba(0, 230, 118, 0.1);
+            --purple: #b388ff;
+            --purple-bg: rgba(179, 136, 255, 0.1);
+            --red: #ff5252;
+            --red-bg: rgba(255, 82, 82, 0.1);
+            --orange: #ffab40;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Cairo', sans-serif; }
+        
+        body { background-color: var(--bg-color); color: var(--text-main); padding-bottom: 80px; padding-top: env(safe-area-inset-top); }
+        
+        .container { padding: 20px; }
+
+        /* Header */
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
+        .user-info h1 { font-size: 22px; font-weight: 900; margin-bottom: 5px; }
+        .user-info p { color: var(--text-muted); font-size: 14px; direction: ltr; text-align: right; }
+        .diamond-box { background: var(--card-bg); padding: 8px 16px; border-radius: 12px; display: flex; align-items: center; gap: 8px; border: 1px solid rgba(255,255,255,0.05); }
+        .diamond-box span { color: #00e5ff; font-weight: bold; font-size: 18px; }
+
+        /* Action Buttons */
+        .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 25px; }
+        .btn-action { border-radius: 16px; padding: 20px; text-align: center; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; border: 1px solid; transition: 0.2s; }
+        .btn-action:active { transform: scale(0.95); }
+        .btn-review { background: var(--purple-bg); border-color: rgba(179, 136, 255, 0.3); color: var(--purple); }
+        .btn-solve-all { background: var(--green-bg); border-color: rgba(0, 230, 118, 0.3); color: var(--green); }
+        .btn-action svg { width: 32px; height: 32px; }
+        .btn-action span { font-weight: bold; font-size: 16px; }
+
+        /* Grid */
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .card { background: var(--card-bg); border-radius: 16px; padding: 20px 15px; text-align: center; position: relative; overflow: hidden; border: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; align-items: center; gap: 8px; }
+        .card-border { position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 70%; height: 4px; border-bottom-left-radius: 10px; border-bottom-right-radius: 10px; }
+        .card-border.PERFECT { background: var(--green); }
+        .card-border.CLEAR { background: var(--orange); }
+        .card-border.RETRY { background: var(--red); }
+        
+        .badge { font-size: 11px; font-weight: bold; padding: 4px 10px; border-radius: 6px; margin-top: 5px; direction: ltr; }
+        .badge.PERFECT { background: var(--green-bg); color: var(--green); }
+        .badge.CLEAR { background: rgba(255, 171, 64, 0.1); color: var(--orange); }
+        .badge.RETRY { background: var(--red-bg); color: var(--red); }
+        
+        .card h3 { font-size: 18px; font-weight: 700; margin-top: 5px; }
+        .card p { color: #00e5ff; font-weight: bold; font-size: 15px; direction: ltr; }
+        .card:active { transform: scale(0.95); }
+
+        /* Bottom Nav */
+        .bottom-nav { position: fixed; bottom: 0; left: 0; width: 100%; background: #121722; border-top: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-around; padding: 15px 0; padding-bottom: env(safe-area-inset-bottom, 15px); z-index: 10; }
+        .nav-item { display: flex; flex-direction: column; align-items: center; gap: 5px; color: var(--text-muted); font-size: 12px; cursor: pointer; }
+        .nav-item.active { color: #00e5ff; }
+        .nav-item svg { width: 24px; height: 24px; }
+
+        /* Login Overlay */
+        #login-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-color); z-index: 100; display: flex; flex-direction: column; justify-content: center; padding: 30px; }
+        #login-screen input { width: 100%; padding: 15px; margin-bottom: 15px; background: var(--card-bg); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; color: white; font-size: 16px; font-family: inherit; }
+        #login-screen button { width: 100%; padding: 15px; background: #00e5ff; color: #000; border: none; border-radius: 12px; font-size: 18px; font-weight: bold; font-family: inherit; }
+
+        /* Logs Modal */
+        #log-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(11, 14, 20, 0.95); backdrop-filter: blur(5px); z-index: 50; display: none; flex-direction: column; }
+        .log-header { padding: 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .log-header h2 { color: #00e5ff; font-size: 20px; }
+        .close-btn { background: var(--red-bg); color: var(--red); border: none; padding: 8px 16px; border-radius: 8px; font-weight: bold; font-family: inherit; }
+        
+        #log-content { flex: 1; padding: 20px; overflow-y: auto; font-family: monospace; font-size: 14px; line-height: 1.6; direction: rtl; }
+        .log-item { margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px dashed rgba(255,255,255,0.05); }
+        .log-info { color: #8892b0; }
+        .log-q { color: #ffab40; margin-top: 5px; }
+        .log-a { color: #00e676; margin-bottom: 5px; }
+        .log-success { color: #00e5ff; font-weight: bold; }
+        .log-error { color: #ff5252; }
+
+        /* Spinner */
+        .spinner { display: inline-block; width: 15px; height: 15px; border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: #fff; animation: spin 1s ease-in-out infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
-<div class="container">
-    <h2>Qureo Solver</h2>
-    <div id="login-section">
+
+    <!-- Login Screen -->
+    <div id="login-screen">
+        <h1 style="text-align: center; color: #00e5ff; margin-bottom: 30px;">Qureo Solver</h1>
         <input type="text" id="student_id" placeholder="Student ID (الأيدي)">
         <input type="password" id="password" placeholder="Password (الباسورد)">
         <button onclick="login()">تسجيل الدخول 🚀</button>
     </div>
 
-    <div id="main-section" class="hidden">
-        <button class="btn-solve-all" onclick="solveAll('all')">حل كل المراحل (الطلقة) 💥</button>
-        <div id="chapters-list"></div>
+    <!-- Main App -->
+    <div class="container" id="main-app" style="display: none;">
+        
+        <div class="header">
+            <div class="user-info">
+                <h1>مرحبا بك 👋</h1>
+                <p id="user-id">~ /loading...</p>
+            </div>
+            <div class="diamond-box">
+                <span id="diamonds">0</span>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="#00e5ff"><path d="M12 2L2 12l10 10 10-10L12 2zm0 3.5l6.5 6.5-6.5 6.5-6.5-6.5L12 5.5z"/></svg>
+            </div>
+        </div>
+
+        <div class="actions">
+            <div class="btn-action btn-review" onclick="solveAll('review')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+                <span>مراجعة الكل</span>
+            </div>
+            <div class="btn-action btn-solve-all" onclick="solveAll('all')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                <span>حل الكل</span>
+            </div>
+        </div>
+
+        <div class="grid" id="chapters-grid">
+            <!-- Chapters will be injected here -->
+        </div>
+
     </div>
-    <div id="log"></div>
-</div>
+
+    <!-- Bottom Nav -->
+    <div class="bottom-nav" id="bottom-nav" style="display: none;">
+        <div class="nav-item" onclick="showLogs()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+            <span>السجل</span>
+        </div>
+        <div class="nav-item active">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+            <span>الرئيسية</span>
+        </div>
+        <div class="nav-item">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+            <span>الإعدادات</span>
+        </div>
+    </div>
+
+    <!-- Logs Modal -->
+    <div id="log-modal">
+        <div class="log-header">
+            <h2 id="log-title">جاري الحل...</h2>
+            <button class="close-btn" onclick="closeLogs()">إخفاء</button>
+        </div>
+        <div id="log-content"></div>
+    </div>
 
 <script>
     const BASE = "https://me-tp.qureo.education";
@@ -46,6 +164,7 @@
     let currentCookies = "";
     let currentSectionId = null;
 
+    // دالة الاتصال بالجافا
     function apiRequest(method, url, body = null) {
         return new Promise((resolve, reject) => {
             const id = cbId++;
@@ -59,69 +178,88 @@
         if(cookies) currentCookies = cookies;
         const cb = callbacks[reqId];
         if (!cb) return;
-        
         let parsedBody = bodyStr;
         try { parsedBody = JSON.parse(bodyStr); } catch(e) {}
-        
         cb.resolve({ status: statusCode, body: parsedBody, cookies: cookies });
         delete callbacks[reqId];
     };
 
     const sleep = ms => new Promise(r => setTimeout(r, ms));
-    const logMsg = (msg, color = "#00ff00") => {
-        const log = document.getElementById('log');
-        log.style.display = 'block';
-        log.innerHTML += `<div style="color:${color}">${msg}</div>`;
-        log.scrollTop = log.scrollHeight;
-    };
+    
+    // نظام اللوجات
+    function openLogs(title) {
+        document.getElementById('log-modal').style.display = 'flex';
+        document.getElementById('log-title').innerText = title;
+        document.getElementById('log-content').innerHTML = '';
+    }
+    function closeLogs() {
+        document.getElementById('log-modal').style.display = 'none';
+    }
+    function showLogs() {
+        document.getElementById('log-modal').style.display = 'flex';
+    }
+    function logMsg(html, type="info") {
+        const box = document.getElementById('log-content');
+        const div = document.createElement('div');
+        div.className = `log-item log-${type}`;
+        div.innerHTML = html;
+        box.appendChild(div);
+        box.scrollTop = box.scrollHeight;
+    }
 
     async function login() {
         const sid = document.getElementById('student_id').value.trim();
         const pwd = document.getElementById('password').value.trim();
         if (!sid || !pwd) return alert("أدخل الأيدي والباسورد");
         
-        logMsg("جاري تسجيل الدخول...", "#00bcd4");
+        const btn = document.querySelector('#login-screen button');
+        btn.innerHTML = '<span class="spinner"></span> جاري الدخول...';
         
         try {
-            // 1. تسجيل الدخول
             const res = await apiRequest("POST", `${PORTAL}/oauth2/password-login`, {student_id: sid, password: pwd});
-            
-            // لو رجع 302 يعني نجح
             if (res.status === 302 || res.status === 200) {
-                document.getElementById('login-section').classList.add('hidden');
-                document.getElementById('main-section').classList.remove('hidden');
-                logMsg("✅ تم تسجيل الدخول", "lime");
-                await loadStatus();
+                document.getElementById('login-screen').style.display = 'none';
+                document.getElementById('main-app').style.display = 'block';
+                document.getElementById('bottom-nav').style.display = 'flex';
+                await loadDashboard();
             } else {
-                logMsg("❌ فشل تسجيل الدخول، تأكد من البيانات", "red");
+                alert("❌ فشل تسجيل الدخول، تأكد من البيانات");
+                btn.innerText = "تسجيل الدخول 🚀";
             }
         } catch(e) {
-            logMsg("❌ خطأ: " + e.message, "red");
+            alert("خطأ: " + e.message);
+            btn.innerText = "تسجيل الدخول 🚀";
         }
     }
 
-    async function loadStatus() {
+    async function loadDashboard() {
         try {
-            // استخراج المادة من الكوكيز اللي رجعت من السيرفر
+            // 1. بيانات المستخدم
+            const me = await apiRequest("GET", `${BASE}/api/study/students/me`);
+            document.getElementById('user-id').innerText = me.body.id || "~ /student";
+            
+            // 2. الجواهر
+            const d = await apiRequest("GET", `${BASE}/api/study/students/courses/javascript_ar/diamond`);
+            document.getElementById('diamonds').innerText = d.body || 0;
+
+            // 3. معرفة القسم
             let courseId = "javascript_ar";
             const match = currentCookies.match(/student_selected_content_id=([^;]+)/);
             if (match) courseId = match[1];
 
-            // جلب السكشن
             const courseData = await apiRequest("GET", `${BASE}/api/study/courses/${courseId}`);
             currentSectionId = courseData.body.basic_section.id;
 
-            // جلب المراحل
+            // 4. المراحل والتقدم
             const meta = await apiRequest("GET", `${BASE}/api/study/sections/${currentSectionId}`);
             const chaptersList = meta.body.chapters;
 
-            // جلب التقدم
             const progress = await apiRequest("GET", `${BASE}/api/study/students/sections/${currentSectionId}/chapters`);
             const progress_map = {};
             if(Array.isArray(progress.body)) progress.body.forEach(x => progress_map[x.chapter_id] = x);
 
-            const container = document.getElementById('chapters-list');
-            container.innerHTML = '';
+            const grid = document.getElementById('chapters-grid');
+            grid.innerHTML = '';
             
             chaptersList.forEach((ch, index) => {
                 const id = ch.id;
@@ -134,28 +272,31 @@
                 if (sc === qn && qn > 0) badge = "PERFECT";
                 else if (sc > 0) badge = "CLEAR";
 
-                container.innerHTML += `
-                    <div class="chapter">
-                        <div class="chapter-info">${num}. ${ch.name || 'مرحلة'} <span class="badge ${badge}">[${badge}] (${sc}/${qn})</span></div>
-                        <button class="solve-btn" onclick="solveOne(${id}, ${num})">حل</button>
+                grid.innerHTML += `
+                    <div class="card" onclick="solveChapter(${id}, ${num})">
+                        <div class="card-border ${badge}"></div>
+                        <span class="badge ${badge}">${badge}</span>
+                        <h3>مرحلة ${num}</h3>
+                        <p>${sc} / ${qn}</p>
                     </div>`;
             });
-        } catch(e) { logMsg("خطأ في جلب الحالة: " + e.message, "red"); }
+        } catch(e) { alert("خطأ في جلب البيانات: " + e.message); }
     }
 
-    async function solveOne(chapId, num) {
-        document.getElementById('log').innerHTML = "";
-        logMsg(`🚀 بدء المرحلة ${num}...`, "#00bcd4");
+    async function solveChapter(chapId, num) {
+        openLogs(`جاري حل مرحلة ${num}`);
+        logMsg(`🚀 بدء المرحلة ${num}...`, 'success');
         try {
             await processChapter(chapId);
             AndroidNative.notify("Qureo Solver", `تم حل المرحلة ${num} بنجاح!`);
-            await loadStatus();
-        } catch(e) { logMsg("❌ خطأ: " + e.message, "red"); }
+            logMsg(`✅ تم الانتهاء من المرحلة ${num}`, 'success');
+            await loadDashboard();
+        } catch(e) { logMsg(`❌ خطأ: ${e.message}`, 'error'); }
     }
 
     async function solveAll(mode) {
-        document.getElementById('log').innerHTML = "";
-        logMsg(`💥 بدء الحل الشامل...`, "#00bcd4");
+        openLogs(`جاري الحل الشامل...`);
+        logMsg(`💥 بدء الحل الشامل...`, 'success');
         try {
             let courseId = "javascript_ar";
             const match = currentCookies.match(/student_selected_content_id=([^;]+)/);
@@ -163,45 +304,42 @@
 
             const courseData = await apiRequest("GET", `${BASE}/api/study/courses/${courseId}`);
             const sectionId = courseData.body.basic_section.id;
-
             const meta = await apiRequest("GET", `${BASE}/api/study/sections/${sectionId}`);
-            const chaptersList = meta.body.chapters;
-            
             const progress = await apiRequest("GET", `${BASE}/api/study/students/sections/${sectionId}/chapters`);
             const progress_map = {};
             if(Array.isArray(progress.body)) progress.body.forEach(x => progress_map[x.chapter_id] = x);
 
-            for (let ch of chaptersList) {
+            for (let ch of meta.body.chapters) {
                 const id = ch.id;
                 const num = ch.seq || 0;
                 const info = progress_map[id] || {};
-                const sc = info.best_correct_count || 0;
-                const qn = ch.question_count || 5;
-
-                if (mode === 'perfect' && sc >= qn) continue;
+                if (mode === 'perfect' && (info.best_correct_count||0) >= (ch.question_count||5)) continue;
                 
-                logMsg(`\n=== المرحلة ${num} ===`, "#00bcd4");
+                logMsg(`\n=== المرحلة ${num} ===`, 'success');
                 await processChapter(id);
                 AndroidNative.notify("Qureo Solver", `تم حل المرحلة ${num} بنجاح!`);
-                await sleep(200);
+                await sleep(100); // سرعة خارقة
             }
-            await loadStatus();
-            logMsg("🎉🎉🎉 انتهى الكل!", "lime");
-            AndroidNative.notify("Qureo Solver", "تم حل جميع المراحل بنجاح!");
-        } catch(e) { logMsg("❌ خطأ: " + e.message, "red"); }
+            await loadDashboard();
+            logMsg("🎉🎉🎉 انتهى الكل!", 'success');
+            AndroidNative.notify("Qureo Solver", "تم حل جميع المراحل!");
+        } catch(e) { logMsg(`❌ خطأ: ${e.message}`, 'error'); }
     }
 
     async function processChapter(chapId) {
+        // 1. جلب بيانات الفصل (الدروس والأسئلة)
         const data = await apiRequest("GET", `${BASE}/api/study/chapters/${chapId}`);
         const testType = data.body.chapter.test_type || "test";
         const prefix = testType === "test" ? "test" : "review";
         const ep = `/api/study/students/${prefix}-questions`;
 
-        // الدروس
+        // 2. حل الدروس
         if (data.body.lectures && data.body.lectures.length > 0) {
-            for (let lec of data.body.lectures) {
-                logMsg(`▶ درس ${lec.id}`, "info");
+            for (let i=0; i<data.body.lectures.length; i++) {
+                let lec = data.body.lectures[i];
+                logMsg(`▶ الدرس ${i+1}`, 'info');
                 await apiRequest("PUT", `${BASE}/api/study/students/lectures/${lec.id}`, {});
+                
                 const lr = await apiRequest("GET", `${BASE}/api/study/lectures/${lec.id}`);
                 if (lr.body.talks) {
                     for (let t of lr.body.talks) {
@@ -209,36 +347,38 @@
                             const ans = t.body.codes[0].model_answer;
                             if (ans) {
                                 await apiRequest("PUT", `${BASE}/api/study/students/lecture-talks/${t.id}`, {value: {try: {lang: "javascript", answer: ans}}});
-                                await sleep(50);
                             }
                         }
                     }
                 }
                 await apiRequest("PUT", `${BASE}/api/study/students/lectures/${lec.id}/complete`, {});
             }
-            await sleep(500);
+            await sleep(200);
         }
 
-        // الأسئلة
+        // 3. جلب الأسئلة
         const qList = await apiRequest("GET", `${BASE}/api/study/chapters/${chapId}/test`);
-        const questions = qList.body.map(q => ({ id: q.question.id, type: q.question.type })).filter(q => q.id);
+        const questions = qList.body.map(q => ({ id: q.question.id, type: q.question.type, text: q.question.content || q.question.text || 'سؤال' })).filter(q => q.id);
         
         if (questions.length === 0) return;
 
-        logMsg(`🔵 PASS 1 (${questions.length} أسئلة)...`, "info");
+        logMsg(`🔵 جلب الإجابات (${questions.length} أسئلة)...`, 'info');
+        
+        // PASS 1: إرسال إجابات عشوائية عشان السيرفر يرجع الإجابات الصح
         await apiRequest("DELETE", `${BASE}/api/study/students/chapters/${chapId}/test`);
         await apiRequest("PUT", `${BASE}/api/study/students/chapters/${chapId}/test`, {});
         
         for (let q of questions) {
             if (q.type === "choice") await apiRequest("PUT", `${BASE}${ep}/${q.id}/answer/choice`, {choice_id: parseInt(q.id + "1")});
             else await apiRequest("PUT", `${BASE}${ep}/${q.id}/answer/description`, {answer_code: "let _x=0;"});
-            await sleep(50);
+            await sleep(20); // سرعة خارقة
         }
 
-        await sleep(800);
+        await sleep(300);
         const r1 = await apiRequest("GET", `${BASE}/api/study/students/chapters/${chapId}/${prefix}/result`);
         let answers = {};
         const res = r1.body.result || r1.body;
+        
         if (res.choice_results) {
             for (let cr of res.choice_results) {
                 let correct = (cr.choices || []).find(c => c.correct);
@@ -251,22 +391,31 @@
             }
         }
 
-        logMsg(`🟢 PASS 2...`, "info");
+        // PASS 2: إرسال الإجابات الصحيحة
+        logMsg(`🟢 إرسال الإجابات الصحيحة...`, 'info');
         await apiRequest("DELETE", `${BASE}/api/study/students/chapters/${chapId}/test`);
         await apiRequest("PUT", `${BASE}/api/study/students/chapters/${chapId}/test`, {});
 
-        for (let q of questions) {
+        for (let i=0; i<questions.length; i++) {
+            let q = questions[i];
             if (q.id in answers) {
-                if (q.type === "choice") await apiRequest("PUT", `${BASE}${ep}/${q.id}/answer/choice`, {choice_id: answers[q.id].choice_id});
-                else await apiRequest("PUT", `${BASE}${ep}/${q.id}/answer/description`, {answer_code: answers[q.id].answer_code});
-                await sleep(50);
+                logMsg(`<strong>السؤال ${i+1}:</strong> ${q.text.substring(0, 50)}...`, 'q');
+                
+                if (q.type === "choice") {
+                    logMsg(`الإجابة: ${answers[q.id].text}`, 'a');
+                    await apiRequest("PUT", `${BASE}${ep}/${q.id}/answer/choice`, {choice_id: answers[q.id].choice_id});
+                } else {
+                    logMsg(`الإجابة: (كود برمجي)`, 'a');
+                    await apiRequest("PUT", `${BASE}${ep}/${q.id}/answer/description`, {answer_code: answers[q.id].answer_code});
+                }
+                await sleep(20);
             }
         }
 
-        await sleep(800);
+        await sleep(300);
         const rf = await apiRequest("GET", `${BASE}/api/study/students/chapters/${chapId}/${prefix}/result`);
         const score = (rf.body.result || rf.body).correct_count || 0;
-        logMsg(`🎉 النتيجة: ${score}/${questions.length}`, "lime");
+        logMsg(`🎉 النتيجة النهائية: ${score}/${questions.length}`, 'success');
     }
 </script>
 </body>
