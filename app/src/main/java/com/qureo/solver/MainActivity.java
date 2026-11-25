@@ -3,6 +3,7 @@ package com.qureo.solver;
 import android.annotation.SuppressLint;
 import android.app.NotificationManager;
 import android.content.Intent;
+import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
 import android.webkit.JavascriptInterface;
@@ -17,25 +18,36 @@ import androidx.core.view.WindowInsetsControllerCompat;
 
 import okhttp3.*;
 import java.io.IOException;
+import java.net.CookieManager;
+import java.net.CookiePolicy;
+import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
     private WebView webView;
-    private OkHttpClient client = new OkHttpClient();
-    private String cookieStr = "";
+    private OkHttpClient client;
+    private CookieManager cookieManager;
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         
-        // إخفاء الخط الأسود (Full Screen)
+        // إخفاء الخط الأسود (Full Screen + Notch Support)
         WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
         WindowInsetsControllerCompat controller = new WindowInsetsControllerCompat(getWindow(), getWindow().getDecorView());
         controller.hide(WindowInsetsCompat.Type.systemBars());
         controller.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+        getWindow().setStatusBarColor(Color.TRANSPARENT);
+        getWindow().setNavigationBarColor(Color.TRANSPARENT);
 
-        // تشغيل خدمة الخلفية
         startService(new Intent(this, KeepAliveService.class));
+
+        // إدارة الكوكيز تلقائياً
+        cookieManager = new CookieManager(null, CookiePolicy.ACCEPT_ALL);
+        client = new OkHttpClient.Builder()
+                .cookieJar(new JavaNetCookieJar(cookieManager))
+                .followRedirects(false) // مهم جداً عشان نلقط الـ 302 والكوكيز في اللوجين
+                .build();
 
         webView = new WebView(this);
         setContentView(webView);
@@ -44,29 +56,25 @@ public class MainActivity extends AppCompatActivity {
         webView.getSettings().setDomStorageEnabled(true);
         webView.getSettings().setAllowFileAccess(true);
         webView.getSettings().setAllowContentAccess(true);
-        webView.getSettings().setAllowUniversalAccessFromFileURLs(true);
-        webView.getSettings().setAllowFileAccessFromFileURLs(true);
-
         webView.setWebViewClient(new WebViewClient());
         webView.setWebChromeClient(new WebChromeClient());
 
-        // الجسر بين HTML والجافا عشان نبعت الطلبات بسرعة بدون CORS
         webView.addJavascriptInterface(new Object() {
-            @JavascriptInterface
-            public void setCookie(String cookies) {
-                cookieStr = cookies;
-            }
-
             @JavascriptInterface
             public void httpRequest(String method, String url, String body, String reqId) {
                 Request.Builder builder = new Request.Builder().url(url);
                 
-                if (!cookieStr.isEmpty()) builder.addHeader("Cookie", cookieStr);
+                // هيدرز مختلفة حسب الدومين
+                if (url.contains("me-portal.qureo.education")) {
+                    builder.addHeader("Origin", "https://me-portal.qureo.education");
+                    builder.addHeader("Referer", "https://me-portal.qureo.education/login");
+                } else {
+                    builder.addHeader("Origin", "https://me-tp.qureo.education");
+                    builder.addHeader("Referer", "https://me-tp.qureo.education/course/javascript_en");
+                    builder.addHeader("X-Requested-With", "mark.via.gp");
+                }
                 builder.addHeader("Content-Type", "application/json");
-                builder.addHeader("X-Requested-With", "mark.via.gp");
-                builder.addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
-                builder.addHeader("Origin", "https://me-tp.qureo.education");
-                builder.addHeader("Referer", "https://me-tp.qureo.education/");
+                builder.addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 16; Infinix X6873) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.8103.50 Mobile Safari/537.36");
 
                 RequestBody reqBody = null;
                 if (body != null && !body.isEmpty() && !body.equals("null")) {
@@ -79,17 +87,20 @@ public class MainActivity extends AppCompatActivity {
                 client.newCall(request).enqueue(new Callback() {
                     @Override
                     public void onFailure(Call call, IOException e) {
-                        sendJsResponse(reqId, "{\"error\":\"" + e.getMessage() + "\"}");
+                        sendJsResponse(reqId, "{\"error\":\"" + e.getMessage() + "\"}", 500, "");
                     }
                     @Override
                     public void onResponse(Call call, Response response) throws IOException {
                         String respBody = response.body() != null ? response.body().string() : "{}";
-                        // إرسال الكوكيز الجديدة لو موجودة
-                        String newCookies = response.header("Set-Cookie");
                         
-                        String escapedBody = respBody.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "").replace("\r", "");
-                        String js = "window.onBridgeResponse('" + reqId + "', '" + escapedBody + "', " + response.code() + ")";
-                        runOnUiThread(() -> webView.evaluateJavascript(js, null));
+                        // تجميع الكوكيز الحالية لتمريرها للـ JS لو حابب يعرف رقم المادة
+                        StringBuilder cookies = new StringBuilder();
+                        List<HttpCookie> cookieList = cookieManager.getCookieStore().getCookies();
+                        for (HttpCookie c : cookieList) {
+                            cookies.append(c.getName()).append("=").append(c.getValue()).append("; ");
+                        }
+
+                        sendJsResponse(reqId, respBody, response.code(), cookies.toString());
                     }
                 });
             }
@@ -111,8 +122,10 @@ public class MainActivity extends AppCompatActivity {
         webView.loadUrl("file:///android_asset/index.html");
     }
 
-    private void sendJsResponse(String reqId, String json) {
-        String js = "window.onBridgeResponse('" + reqId + "', '" + json.replace("'", "\\'") + "', 200)";
+    private void sendJsResponse(String reqId, String json, int statusCode, String cookies) {
+        String escapedJson = json.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "").replace("\r", "");
+        String escapedCookies = cookies.replace("'", "\\'");
+        String js = "window.onBridgeResponse('" + reqId + "', '" + escapedJson + "', " + statusCode + ", '" + escapedCookies + "')";
         runOnUiThread(() -> webView.evaluateJavascript(js, null));
     }
 

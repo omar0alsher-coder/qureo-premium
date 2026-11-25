@@ -7,8 +7,7 @@
     <style>
         body { background-color: #0f111a; color: #fff; font-family: 'Segoe UI', Tahoma, sans-serif; margin: 0; padding: env(safe-area-inset-top) 15px 15px 15px; user-select: none; }
         .container { max-width: 600px; margin: auto; padding-top: 20px; }
-        input, textarea { width: 100%; padding: 12px; margin: 5px 0; border: 1px solid #333; background: #1e1e2f; color: #fff; border-radius: 8px; box-sizing: border-box; font-family: inherit; }
-        textarea { height: 80px; resize: none; }
+        input { width: 100%; padding: 12px; margin: 5px 0; border: 1px solid #333; background: #1e1e2f; color: #fff; border-radius: 8px; box-sizing: border-box; font-family: inherit; }
         button { background: #00bcd4; color: #000; border: none; padding: 12px; font-weight: bold; border-radius: 8px; cursor: pointer; width: 100%; margin-top: 10px; }
         .btn-solve-all { background: #4caf50; color: white; margin-bottom: 15px; font-size: 16px; }
         .chapter { display: flex; justify-content: space-between; align-items: center; background: #1e1e2f; padding: 10px; margin: 5px 0; border-radius: 8px; font-size: 14px; }
@@ -18,7 +17,7 @@
         .CLEAR { background: #ff9800; color: white; }
         .RETRY { background: #f44336; color: white; }
         .solve-btn { background: #2196f3; color: white; padding: 6px 12px; width: auto; margin: 0; font-size: 12px; }
-        #log { background: #000; color: #00ff00; font-family: monospace; padding: 10px; height: 200px; overflow-y: auto; border-radius: 8px; margin-top: 15px; font-size: 12px; display: none; white-space: pre-wrap; }
+        #log { background: #000; color: #00ff00; font-family: monospace; padding: 10px; height: 250px; overflow-y: auto; border-radius: 8px; margin-top: 15px; font-size: 12px; display: none; white-space: pre-wrap; border: 1px solid #333; }
         .hidden { display: none; }
         h2 { text-align: center; color: #00bcd4; margin-top: 0; }
     </style>
@@ -27,7 +26,8 @@
 <div class="container">
     <h2>Qureo Solver</h2>
     <div id="login-section">
-        <textarea id="cookies" placeholder="أدخل الكوكيز هنا (Cookies)"></textarea>
+        <input type="text" id="student_id" placeholder="Student ID (الأيدي)">
+        <input type="password" id="password" placeholder="Password (الباسورد)">
         <button onclick="login()">تسجيل الدخول 🚀</button>
     </div>
 
@@ -40,30 +40,30 @@
 
 <script>
     const BASE = "https://me-tp.qureo.education";
-    let currentCookies = "";
+    const PORTAL = "https://me-portal.qureo.education";
     let callbacks = {};
     let cbId = 0;
+    let currentCookies = "";
     let currentSectionId = null;
 
-    function apiRequest(method, path, body = null) {
+    function apiRequest(method, url, body = null) {
         return new Promise((resolve, reject) => {
             const id = cbId++;
             callbacks[id] = { resolve, reject };
-            const fullUrl = BASE + path;
             const bodyStr = body ? JSON.stringify(body) : "";
-            AndroidNative.httpRequest(method, fullUrl, bodyStr, id.toString());
+            AndroidNative.httpRequest(method, url, bodyStr, id.toString());
         });
     }
 
-    window.onBridgeResponse = function(reqId, bodyStr, statusCode) {
+    window.onBridgeResponse = function(reqId, bodyStr, statusCode, cookies) {
+        if(cookies) currentCookies = cookies;
         const cb = callbacks[reqId];
         if (!cb) return;
-        if (statusCode >= 400 && statusCode !== 404) {
-            cb.reject(new Error("HTTP " + statusCode));
-        } else {
-            try { cb.resolve(JSON.parse(bodyStr)); } 
-            catch(e) { cb.resolve(bodyStr); }
-        }
+        
+        let parsedBody = bodyStr;
+        try { parsedBody = JSON.parse(bodyStr); } catch(e) {}
+        
+        cb.resolve({ status: statusCode, body: parsedBody, cookies: cookies });
         delete callbacks[reqId];
     };
 
@@ -76,43 +76,50 @@
     };
 
     async function login() {
-        currentCookies = document.getElementById('cookies').value;
-        if (!currentCookies) return alert("أدخل الكوكيز أولاً");
-        AndroidNative.setCookie(currentCookies);
+        const sid = document.getElementById('student_id').value.trim();
+        const pwd = document.getElementById('password').value.trim();
+        if (!sid || !pwd) return alert("أدخل الأيدي والباسورد");
         
-        logMsg("جاري الاتصال...", "#00bcd4");
+        logMsg("جاري تسجيل الدخول...", "#00bcd4");
+        
         try {
-            const me = await apiRequest("GET", "/api/study/students/me");
-            document.getElementById('login-section').classList.add('hidden');
-            document.getElementById('main-section').classList.remove('hidden');
-            await loadStatus();
-            logMsg("✅ تم تسجيل الدخول", "lime");
+            // 1. تسجيل الدخول
+            const res = await apiRequest("POST", `${PORTAL}/oauth2/password-login`, {student_id: sid, password: pwd});
+            
+            // لو رجع 302 يعني نجح
+            if (res.status === 302 || res.status === 200) {
+                document.getElementById('login-section').classList.add('hidden');
+                document.getElementById('main-section').classList.remove('hidden');
+                logMsg("✅ تم تسجيل الدخول", "lime");
+                await loadStatus();
+            } else {
+                logMsg("❌ فشل تسجيل الدخول، تأكد من البيانات", "red");
+            }
         } catch(e) {
-            logMsg("❌ فشل الاتصال، تأكد من الكوكيز", "red");
+            logMsg("❌ خطأ: " + e.message, "red");
         }
     }
 
     async function loadStatus() {
         try {
-            // 1. استخراج معرف الكورس من الكوكيز (javascript_ar, python, الخ)
+            // استخراج المادة من الكوكيز اللي رجعت من السيرفر
             let courseId = "javascript_ar";
-            const cookieMatch = currentCookies.match(/student_selected_content_id=([^;]+)/);
-            if (cookieMatch) courseId = cookieMatch[1];
+            const match = currentCookies.match(/student_selected_content_id=([^;]+)/);
+            if (match) courseId = match[1];
 
-            // 2. جلب رقم السكشن الحقيقي
-            const courseData = await apiRequest("GET", `/api/study/courses/${courseId}`);
-            currentSectionId = courseData.basic_section.id;
+            // جلب السكشن
+            const courseData = await apiRequest("GET", `${BASE}/api/study/courses/${courseId}`);
+            currentSectionId = courseData.body.basic_section.id;
 
-            // 3. جلب قائمة المراحل الحقيقية من السيرفر (هتجيب 42 أو 54 أو أي رقم)
-            const meta = await apiRequest("GET", `/api/study/sections/${currentSectionId}`);
-            const chaptersList = meta.chapters;
+            // جلب المراحل
+            const meta = await apiRequest("GET", `${BASE}/api/study/sections/${currentSectionId}`);
+            const chaptersList = meta.body.chapters;
 
-            // 4. جلب حالة كل مرحلة (حل ولا لسه)
-            const progress = await apiRequest("GET", `/api/study/students/sections/${currentSectionId}/chapters`);
+            // جلب التقدم
+            const progress = await apiRequest("GET", `${BASE}/api/study/students/sections/${currentSectionId}/chapters`);
             const progress_map = {};
-            if(Array.isArray(progress)) progress.forEach(x => progress_map[x.chapter_id] = x);
+            if(Array.isArray(progress.body)) progress.body.forEach(x => progress_map[x.chapter_id] = x);
 
-            // 5. رسم الواجهة
             const container = document.getElementById('chapters-list');
             container.innerHTML = '';
             
@@ -150,20 +157,19 @@
         document.getElementById('log').innerHTML = "";
         logMsg(`💥 بدء الحل الشامل...`, "#00bcd4");
         try {
-            // نفس المنطق الذكي لجلب المراحل
             let courseId = "javascript_ar";
-            const cookieMatch = currentCookies.match(/student_selected_content_id=([^;]+)/);
-            if (cookieMatch) courseId = cookieMatch[1];
+            const match = currentCookies.match(/student_selected_content_id=([^;]+)/);
+            if (match) courseId = match[1];
 
-            const courseData = await apiRequest("GET", `/api/study/courses/${courseId}`);
-            const sectionId = courseData.basic_section.id;
+            const courseData = await apiRequest("GET", `${BASE}/api/study/courses/${courseId}`);
+            const sectionId = courseData.body.basic_section.id;
 
-            const meta = await apiRequest("GET", `/api/study/sections/${sectionId}`);
-            const chaptersList = meta.chapters;
+            const meta = await apiRequest("GET", `${BASE}/api/study/sections/${sectionId}`);
+            const chaptersList = meta.body.chapters;
             
-            const progress = await apiRequest("GET", `/api/study/students/sections/${sectionId}/chapters`);
+            const progress = await apiRequest("GET", `${BASE}/api/study/students/sections/${sectionId}/chapters`);
             const progress_map = {};
-            if(Array.isArray(progress)) progress.forEach(x => progress_map[x.chapter_id] = x);
+            if(Array.isArray(progress.body)) progress.body.forEach(x => progress_map[x.chapter_id] = x);
 
             for (let ch of chaptersList) {
                 const id = ch.id;
@@ -186,53 +192,53 @@
     }
 
     async function processChapter(chapId) {
-        const data = await apiRequest("GET", `/api/study/chapters/${chapId}`);
-        const testType = data.chapter.test_type || "test";
+        const data = await apiRequest("GET", `${BASE}/api/study/chapters/${chapId}`);
+        const testType = data.body.chapter.test_type || "test";
         const prefix = testType === "test" ? "test" : "review";
         const ep = `/api/study/students/${prefix}-questions`;
 
-        if (data.lectures && data.lectures.length > 0) {
-            for (let lec of data.lectures) {
+        // الدروس
+        if (data.body.lectures && data.body.lectures.length > 0) {
+            for (let lec of data.body.lectures) {
                 logMsg(`▶ درس ${lec.id}`, "info");
-                await apiRequest("PUT", `/api/study/students/lectures/${lec.id}`, {});
-                const lr = await apiRequest("GET", `/api/study/lectures/${lec.id}`);
-                if (lr.talks) {
-                    for (let t of lr.talks) {
+                await apiRequest("PUT", `${BASE}/api/study/students/lectures/${lec.id}`, {});
+                const lr = await apiRequest("GET", `${BASE}/api/study/lectures/${lec.id}`);
+                if (lr.body.talks) {
+                    for (let t of lr.body.talks) {
                         if (t.type === "try") {
                             const ans = t.body.codes[0].model_answer;
                             if (ans) {
-                                await apiRequest("PUT", `/api/study/students/lecture-talks/${t.id}`, {value: {try: {lang: "javascript", answer: ans}}});
+                                await apiRequest("PUT", `${BASE}/api/study/students/lecture-talks/${t.id}`, {value: {try: {lang: "javascript", answer: ans}}});
                                 await sleep(50);
                             }
                         }
                     }
                 }
-                await apiRequest("PUT", `/api/study/students/lectures/${lec.id}/complete`, {});
+                await apiRequest("PUT", `${BASE}/api/study/students/lectures/${lec.id}/complete`, {});
             }
             await sleep(500);
         }
 
-        const qList = await apiRequest("GET", `/api/study/chapters/${chapId}/test`);
-        const questions = qList.map(q => ({ id: q.question.id, type: q.question.type })).filter(q => q.id);
+        // الأسئلة
+        const qList = await apiRequest("GET", `${BASE}/api/study/chapters/${chapId}/test`);
+        const questions = qList.body.map(q => ({ id: q.question.id, type: q.question.type })).filter(q => q.id);
         
-        if (questions.length === 0) {
-            logMsg("لا توجد أسئلة", "warn"); return;
-        }
+        if (questions.length === 0) return;
 
         logMsg(`🔵 PASS 1 (${questions.length} أسئلة)...`, "info");
-        await apiRequest("DELETE", `/api/study/students/chapters/${chapId}/test`);
-        await apiRequest("PUT", `/api/study/students/chapters/${chapId}/test`, {});
+        await apiRequest("DELETE", `${BASE}/api/study/students/chapters/${chapId}/test`);
+        await apiRequest("PUT", `${BASE}/api/study/students/chapters/${chapId}/test`, {});
         
         for (let q of questions) {
-            if (q.type === "choice") await apiRequest("PUT", `${ep}/${q.id}/answer/choice`, {choice_id: parseInt(q.id + "1")});
-            else await apiRequest("PUT", `${ep}/${q.id}/answer/description`, {answer_code: "let _x=0;"});
+            if (q.type === "choice") await apiRequest("PUT", `${BASE}${ep}/${q.id}/answer/choice`, {choice_id: parseInt(q.id + "1")});
+            else await apiRequest("PUT", `${BASE}${ep}/${q.id}/answer/description`, {answer_code: "let _x=0;"});
             await sleep(50);
         }
 
         await sleep(800);
-        const r1 = await apiRequest("GET", `/api/study/students/chapters/${chapId}/${prefix}/result`);
+        const r1 = await apiRequest("GET", `${BASE}/api/study/students/chapters/${chapId}/${prefix}/result`);
         let answers = {};
-        const res = r1.result || r1;
+        const res = r1.body.result || r1.body;
         if (res.choice_results) {
             for (let cr of res.choice_results) {
                 let correct = (cr.choices || []).find(c => c.correct);
@@ -246,23 +252,20 @@
         }
 
         logMsg(`🟢 PASS 2...`, "info");
-        await apiRequest("DELETE", `/api/study/students/chapters/${chapId}/test`);
-        await apiRequest("PUT", `/api/study/students/chapters/${chapId}/test`, {});
+        await apiRequest("DELETE", `${BASE}/api/study/students/chapters/${chapId}/test`);
+        await apiRequest("PUT", `${BASE}/api/study/students/chapters/${chapId}/test`, {});
 
         for (let q of questions) {
             if (q.id in answers) {
-                if (q.type === "choice") {
-                    await apiRequest("PUT", `${ep}/${q.id}/answer/choice`, {choice_id: answers[q.id].choice_id});
-                } else {
-                    await apiRequest("PUT", `${ep}/${q.id}/answer/description`, {answer_code: answers[q.id].answer_code});
-                }
+                if (q.type === "choice") await apiRequest("PUT", `${BASE}${ep}/${q.id}/answer/choice`, {choice_id: answers[q.id].choice_id});
+                else await apiRequest("PUT", `${BASE}${ep}/${q.id}/answer/description`, {answer_code: answers[q.id].answer_code});
                 await sleep(50);
             }
         }
 
         await sleep(800);
-        const rf = await apiRequest("GET", `/api/study/students/chapters/${chapId}/${prefix}/result`);
-        const score = (rf.result || rf).correct_count || 0;
+        const rf = await apiRequest("GET", `${BASE}/api/study/students/chapters/${chapId}/${prefix}/result`);
+        const score = (rf.body.result || rf.body).correct_count || 0;
         logMsg(`🎉 النتيجة: ${score}/${questions.length}`, "lime");
     }
 </script>
