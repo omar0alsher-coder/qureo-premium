@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Qureo Solver</title>
+    <style>
+        body { background-color: #0f111a; color: #fff; font-family: 'Segoe UI', Tahoma, sans-serif; margin: 0; padding: env(safe-area-inset-top) 15px 15px 15px; user-select: none; }
+        .container { max-width: 600px; margin: auto; padding-top: 20px; }
+        input, textarea { width: 100%; padding: 12px; margin: 5px 0; border: 1px solid #333; background: #1e1e2f; color: #fff; border-radius: 8px; box-sizing: border-box; font-family: inherit; }
+        textarea { height: 80px; resize: none; }
+        button { background: #00bcd4; color: #000; border: none; padding: 12px; font-weight: bold; border-radius: 8px; cursor: pointer; width: 100%; margin-top: 10px; }
+        .btn-solve-all { background: #4caf50; color: white; margin-bottom: 15px; font-size: 16px; }
+        .chapter { display: flex; justify-content: space-between; align-items: center; background: #1e1e2f; padding: 10px; margin: 5px 0; border-radius: 8px; font-size: 14px; }
+        .chapter-info { flex: 1; }
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; margin: 0 5px; }
+        .PERFECT { background: #4caf50; color: white; }
+        .CLEAR { background: #ff9800; color: white; }
+        .RETRY { background: #f44336; color: white; }
+        .solve-btn { background: #2196f3; color: white; padding: 6px 12px; width: auto; margin: 0; font-size: 12px; }
+        #log { background: #000; color: #00ff00; font-family: monospace; padding: 10px; height: 200px; overflow-y: auto; border-radius: 8px; margin-top: 15px; font-size: 12px; display: none; white-space: pre-wrap; }
+        .hidden { display: none; }
+        h2 { text-align: center; color: #00bcd4; margin-top: 0; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h2>Qureo Solver</h2>
+    <div id="login-section">
+        <textarea id="cookies" placeholder="أدخل الكوكيز هنا (Cookies)"></textarea>
+        <button onclick="login()">تسجيل الدخول 🚀</button>
+    </div>
+
+    <div id="main-section" class="hidden">
+        <button class="btn-solve-all" onclick="solveAll('all')">حل كل المراحل (الطلقة) 💥</button>
+        <div id="chapters-list"></div>
+    </div>
+    <div id="log"></div>
+</div>
+
+<script>
+    const BASE = "https://me-tp.qureo.education";
+    let currentCookies = "";
+    let callbacks = {};
+    let cbId = 0;
+
+    // دالة الاتصال بالجافا
+    function apiRequest(method, path, body = null) {
+        return new Promise((resolve, reject) => {
+            const id = cbId++;
+            callbacks[id] = { resolve, reject };
+            const fullUrl = BASE + path;
+            const bodyStr = body ? JSON.stringify(body) : "";
+            AndroidNative.httpRequest(method, fullUrl, bodyStr, id.toString());
+        });
+    }
+
+    // دالة استقبال الرد من الجافا
+    window.onBridgeResponse = function(reqId, bodyStr, statusCode) {
+        const cb = callbacks[reqId];
+        if (!cb) return;
+        if (statusCode >= 400 && statusCode !== 404) {
+            cb.reject(new Error("HTTP " + statusCode));
+        } else {
+            try { cb.resolve(JSON.parse(bodyStr)); } 
+            catch(e) { cb.resolve(bodyStr); }
+        }
+        delete callbacks[reqId];
+    };
+
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
+    const logMsg = (msg, color = "#00ff00") => {
+        const log = document.getElementById('log');
+        log.style.display = 'block';
+        log.innerHTML += `<div style="color:${color}">${msg}</div>`;
+        log.scrollTop = log.scrollHeight;
+    };
+
+    async function login() {
+        currentCookies = document.getElementById('cookies').value;
+        if (!currentCookies) return alert("أدخل الكوكيز أولاً");
+        AndroidNative.setCookie(currentCookies);
+        
+        logMsg("جاري الاتصال...", "#00bcd4");
+        try {
+            const me = await apiRequest("GET", "/api/study/students/me");
+            document.getElementById('login-section').classList.add('hidden');
+            document.getElementById('main-section').classList.remove('hidden');
+            await loadStatus();
+            logMsg("✅ تم تسجيل الدخول", "lime");
+        } catch(e) {
+            logMsg("❌ فشل الاتصال، تأكد من الكوكيز", "red");
+        }
+    }
+
+    async function loadStatus() {
+        try {
+            const chaps = await apiRequest("GET", "/api/study/students/sections/5/chapters");
+            const progress_map = {};
+            if(Array.isArray(chaps)) chaps.forEach(x => progress_map[x.chapter_id] = x);
+            
+            const meta = await apiRequest("GET", "/api/study/sections/5");
+            const q_map = {};
+            if(meta.chapters) meta.chapters.forEach(x => q_map[x.id] = x.question_count || 5);
+
+            const container = document.getElementById('chapters-list');
+            container.innerHTML = '';
+            for (let i = 1; i <= 42; i++) {
+                const id = 90000 + i;
+                const info = progress_map[id] || {};
+                const sc = info.best_correct_count || 0;
+                const qn = q_map[id] || 5;
+                let badge = "RETRY";
+                if (sc === qn && qn > 0) badge = "PERFECT";
+                else if (sc > 0) badge = "CLEAR";
+
+                container.innerHTML += `
+                    <div class="chapter">
+                        <div class="chapter-info">${i}. مرحلة <span class="badge ${badge}">[${badge}] (${sc}/${qn})</span></div>
+                        <button class="solve-btn" onclick="solveOne(${id}, ${i})">حل</button>
+                    </div>`;
+            }
+        } catch(e) { logMsg("خطأ في جلب الحالة: " + e.message, "red"); }
+    }
+
+    async function solveOne(chapId, num) {
+        document.getElementById('log').innerHTML = "";
+        logMsg(`🚀 بدء المرحلة ${num}...`, "#00bcd4");
+        try {
+            await processChapter(chapId);
+            AndroidNative.notify("Qureo Solver", `تم حل المرحلة ${num} بنجاح!`);
+            await loadStatus();
+        } catch(e) { logMsg("❌ خطأ: " + e.message, "red"); }
+    }
+
+    async function solveAll(mode) {
+        document.getElementById('log').innerHTML = "";
+        logMsg(`💥 بدء الحل الشامل...`, "#00bcd4");
+        try {
+            const chaps = await apiRequest("GET", "/api/study/students/sections/5/chapters");
+            const progress_map = {};
+            if(Array.isArray(chaps)) chaps.forEach(x => progress_map[x.chapter_id] = x);
+            const meta = await apiRequest("GET", "/api/study/sections/5");
+            const q_map = {};
+            if(meta.chapters) meta.chapters.forEach(x => q_map[x.id] = x.question_count || 5);
+
+            for (let i = 1; i <= 42; i++) {
+                const id = 90000 + i;
+                const info = progress_map[id] || {};
+                const sc = info.best_correct_count || 0;
+                const qn = q_map[id] || 5;
+
+                if (mode === 'perfect' && sc >= qn) continue;
+                
+                logMsg(`\n=== المرحلة ${i} ===`, "#00bcd4");
+                await processChapter(id);
+                AndroidNative.notify("Qureo Solver", `تم حل المرحلة ${i} بنجاح!`);
+                await sleep(200);
+            }
+            await loadStatus();
+            logMsg("🎉🎉🎉 انتهى الكل!", "lime");
+            AndroidNative.notify("Qureo Solver", "تم حل جميع المراحل بنجاح!");
+        } catch(e) { logMsg("❌ خطأ: " + e.message, "red"); }
+    }
+
+    async function processChapter(chapId) {
+        const data = await apiRequest("GET", `/api/study/chapters/${chapId}`);
+        const testType = data.chapter.test_type || "test";
+        const prefix = testType === "test" ? "test" : "review";
+        const ep = `/api/study/students/${prefix}-questions`;
+
+        // الدروس
+        if (data.lectures && data.lectures.length > 0) {
+            for (let lec of data.lectures) {
+                logMsg(`▶ درس ${lec.id}`, "info");
+                await apiRequest("PUT", `/api/study/students/lectures/${lec.id}`, {});
+                const lr = await apiRequest("GET", `/api/study/lectures/${lec.id}`);
+                if (lr.talks) {
+                    for (let t of lr.talks) {
+                        if (t.type === "try") {
+                            const ans = t.body.codes[0].model_answer;
+                            if (ans) {
+                                await apiRequest("PUT", `/api/study/students/lecture-talks/${t.id}`, {value: {try: {lang: "javascript", answer: ans}}});
+                                await sleep(50);
+                            }
+                        }
+                    }
+                }
+                await apiRequest("PUT", `/api/study/students/lectures/${lec.id}/complete`, {});
+            }
+            await sleep(500);
+        }
+
+        // الأسئلة
+        const qList = await apiRequest("GET", `/api/study/chapters/${chapId}/test`);
+        const questions = qList.map(q => ({ id: q.question.id, type: q.question.type })).filter(q => q.id);
+        
+        if (questions.length === 0) {
+            logMsg("لا توجد أسئلة", "warn"); return;
+        }
+
+        logMsg(`🔵 PASS 1 (${questions.length} أسئلة)...`, "info");
+        await apiRequest("DELETE", `/api/study/students/chapters/${chapId}/test`);
+        await apiRequest("PUT", `/api/study/students/chapters/${chapId}/test`, {});
+        
+        for (let q of questions) {
+            if (q.type === "choice") await apiRequest("PUT", `${ep}/${q.id}/answer/choice`, {choice_id: parseInt(q.id + "1")});
+            else await apiRequest("PUT", `${ep}/${q.id}/answer/description`, {answer_code: "let _x=0;"});
+            await sleep(50);
+        }
+
+        await sleep(800);
+        const r1 = await apiRequest("GET", `/api/study/students/chapters/${chapId}/${prefix}/result`);
+        let answers = {};
+        const res = r1.result || r1;
+        if (res.choice_results) {
+            for (let cr of res.choice_results) {
+                let correct = (cr.choices || []).find(c => c.correct);
+                if (correct && correct.choice) answers[cr.question_id] = { choice_id: correct.choice.id, text: correct.choice.content };
+            }
+        }
+        if (res.description_results) {
+            for (let dr of res.description_results) {
+                if (dr.model_answer) answers[dr.question_id] = { answer_code: dr.model_answer };
+            }
+        }
+
+        logMsg(`🟢 PASS 2...`, "info");
+        await apiRequest("DELETE", `/api/study/students/chapters/${chapId}/test`);
+        await apiRequest("PUT", `/api/study/students/chapters/${chapId}/test`, {});
+
+        for (let q of questions) {
+            if (q.id in answers) {
+                if (q.type === "choice") {
+                    await apiRequest("PUT", `${ep}/${q.id}/answer/choice`, {choice_id: answers[q.id].choice_id});
+                } else {
+                    await apiRequest("PUT", `${ep}/${q.id}/answer/description`, {answer_code: answers[q.id].answer_code});
+                }
+                await sleep(50);
+            }
+        }
+
+        await sleep(800);
+        const rf = await apiRequest("GET", `/api/study/students/chapters/${chapId}/${prefix}/result`);
+        const score = (rf.result || rf).correct_count || 0;
+        logMsg(`🎉 النتيجة: ${score}/${questions.length}`, "lime");
+    }
+</script>
+</body>
+</html>
